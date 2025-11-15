@@ -1,6 +1,6 @@
 # Holiday Planner Dashboard
 
-A responsive web dashboard to help you plan and track your annual leave holidays, sick days, bank holidays and unpaid leave. Built with HTML, CSS, and JavaScript.
+A responsive web dashboard to help you plan and track your annual leave holidays, sick days, bank holidays and unpaid leave. Built with HTML, CSS and JavaScript.
 
 ## Features
 - Interactive calendar with month and year views
@@ -24,3 +24,4 @@ A responsive web dashboard to help you plan and track your annual leave holidays
 - **Sick Day**: Does not count toward allowance
 - **Unpaid Leave**: Does not count toward allowance
 - **Bank Holiday**: UK public holidays (auto-highlighted)
+
