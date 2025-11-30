@@ -30,19 +30,209 @@ let holidays = {};
 let selectedDate = null;
 let currentView = 'month'; 
 let multiSelectMode = false;
-let selectedDates = []; 
+let selectedDates = [];
+let currentMainView = 'dashboard';
 
 document.addEventListener('DOMContentLoaded', () => {
     loadFromLocalStorage();
     renderCalendar();
     renderYearView();
     attachEventListeners();
+    attachNavigationListeners();
     updateStats();
+    updateDashboard();
+    updateTimeOffTable();
 
     if (window.innerWidth <= 768) {
         document.getElementById('sidebar').classList.add('hidden');
     }
 });
+
+// Navigation Management
+function attachNavigationListeners() {
+    const navItems = document.querySelectorAll('.nav-item');
+    const views = document.querySelectorAll('.view-container');
+
+    navItems.forEach(item => {
+        item.addEventListener('click', () => {
+            const viewName = item.dataset.view;
+            switchMainView(viewName);
+        });
+    });
+}
+
+// Switch main view (dashboard, calendar, attendance)
+function switchMainView(viewName) {
+    currentMainView = viewName;
+
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.remove('active');
+        if (item.dataset.view === viewName) {
+            item.classList.add('active');
+        }
+    });
+    
+    document.querySelectorAll('.view-container').forEach(view => {
+        view.classList.remove('active');
+    });
+    
+    const viewElement = document.getElementById(viewName + 'View');
+    if (viewElement) {
+        viewElement.classList.add('active');
+        
+        if (viewName === 'dashboard') {
+            updateDashboard();
+            updateTimeOffTable();
+        }
+    }
+    
+    if (window.innerWidth <= 768) {
+        document.getElementById('sidebar').classList.add('hidden');
+    }
+}
+
+// Update dashboard stats and cards
+function updateDashboard() {
+    const usedHolidayDays = Object.keys(holidays).filter(dateStr => {
+        const dayData = holidays[dateStr];
+        return dayData.type === 'holiday' || !dayData.type;
+    }).length;
+    
+    const availableDays = Math.max(0, totalHolidays - usedHolidayDays);
+    const sickDaysList = Object.keys(holidays).filter(dateStr => holidays[dateStr].type === 'sick');
+    const sickDayCount = sickDaysList.length;
+    
+    // Estimate sick periods as groups of consecutive days until corrrect implementation
+    let sickPeriods = 0;
+    if (sickDayCount > 0) {
+        const sortedSickDates = sickDaysList.sort();
+        sickPeriods = 1;
+        for (let i = 1; i < sortedSickDates.length; i++) {
+            const prevDate = new Date(sortedSickDates[i-1]);
+            const currDate = new Date(sortedSickDates[i]);
+            const diffTime = currDate - prevDate;
+            const diffDays = diffTime / (1000 * 60 * 60 * 24);
+            if (diffDays > 1) {
+                sickPeriods++;
+            }
+        }
+    }
+    
+    document.getElementById('dashTotalDays').textContent = totalHolidays;
+    document.getElementById('dashUsedDays').textContent = usedHolidayDays;
+    document.getElementById('dashAvailableDays').textContent = availableDays;
+    document.getElementById('dashSickPeriods').textContent = sickPeriods;
+    document.getElementById('dashSickDays').textContent = sickDayCount;
+    
+    const totalDaysInYear = 365;
+    const daysOff = Object.keys(holidays).length;
+    const attendanceDays = totalDaysInYear - daysOff;
+    const attendancePercentage = Math.round((attendanceDays / totalDaysInYear) * 100);
+    
+    document.getElementById('attendancePercentage').textContent = attendancePercentage + '%';
+    
+    const canvas = document.getElementById('attendanceChart');
+    if (canvas) {
+        drawPieChart(canvas, attendancePercentage);
+    }
+}
+
+// Draw a simple pie chart on canvas
+function drawPieChart(canvas, percentage) {
+    if (!canvas || !canvas.getContext) return;
+    
+    const ctx = canvas.getContext('2d');
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = Math.min(canvas.width, canvas.height) / 2 - 5;
+    
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#e1e8ed';
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    ctx.fill();
+    
+    ctx.fillStyle = '#4ecdc4';
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.arc(centerX, centerY, radius, -Math.PI / 2, (-Math.PI / 2) + (percentage / 100) * 2 * Math.PI);
+    ctx.lineTo(centerX, centerY);
+    ctx.fill();
+
+    ctx.fillStyle = '#2c3e50';
+    ctx.font = 'bold 14px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(percentage + '%', centerX, centerY);
+}
+
+// Update time off table
+function updateTimeOffTable() {
+    const tbody = document.getElementById('timeOffTableBody');
+    const filterSelect = document.getElementById('filterTimeOff');
+    const filter = filterSelect ? filterSelect.value : 'all';
+    
+    if (Object.keys(holidays).length === 0) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No time off recorded</td></tr>';
+        return;
+    }
+    
+    const sortedDates = Object.keys(holidays).sort();
+    let filteredDates = sortedDates;
+    
+    if (filter !== 'all') {
+        filteredDates = sortedDates.filter(dateStr => {
+            const dayType = holidays[dateStr].type || 'holiday';
+            return dayType === filter;
+        });
+    }
+    
+    if (filteredDates.length === 0) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No records for this filter</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = filteredDates.map(dateStr => {
+        const date = new Date(dateStr);
+        const dayOfWeek = date.toLocaleDateString('en-US', { weekday: 'short' });
+        const dateFormatted = date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        const holidayData = holidays[dateStr];
+        const dayType = holidayData.type || 'holiday';
+        const typeLabel = dayType === 'sick' ? 'Sick Day' : dayType === 'unpaid' ? 'Unpaid Leave' : 'Holiday';
+        
+        return `
+            <tr>
+                <td>${dateFormatted}</td>
+                <td>${dayOfWeek}</td>
+                <td>${typeLabel}</td>
+                <td>${holidayData.label}</td>
+                <td><button class="remove-btn" onclick="removeHoliday('${dateStr}')">Remove</button></td>
+            </tr>
+        `;
+    }).join('');
+    
+    const style = document.createElement('style');
+    if (!document.querySelector('#table-button-styles')) {
+        style.id = 'table-button-styles';
+        style.textContent = `
+            .remove-btn {
+                background: #ff6b6b;
+                color: white;
+                border: none;
+                padding: 4px 8px;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 0.8em;
+                transition: all 0.2s ease;
+            }
+            .remove-btn:hover {
+                background: #ee5a52;
+            }
+        `;
+        document.head.appendChild(style);
+    }
+}
 
 
 // Render the calendar
@@ -176,9 +366,9 @@ function createDayElement(container, day, date, isOtherMonth) {
                 dayElement.classList.add('selected');
                 selectedDate = dateStr;
                 selectedDates = [];
-                document.getElementById('selectedDate').value = 
+                document.getElementById('selectedDateRight').value = 
                     new Date(dateStr).toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-                document.getElementById('selectedDatesContainer').style.display = 'none';
+                document.getElementById('selectedDatesContainerRight').style.display = 'none';
             }
         });
     }
@@ -355,8 +545,8 @@ function getContrastColor(hexColor) {
 
 // Update multi-select display
 function updateMultiSelectDisplay() {
-    const container = document.getElementById('selectedDatesContainer');
-    const list = document.getElementById('selectedDatesList');
+    const container = document.getElementById('selectedDatesContainerRight');
+    const list = document.getElementById('selectedDatesListRight');
     
     if (selectedDates.length === 0) {
         container.style.display = 'none';
@@ -390,37 +580,35 @@ function updateMultiSelectDisplay() {
 function attachEventListeners() {
     const sidebar = document.getElementById('sidebar');
     
-    document.getElementById('multiSelectMode').addEventListener('change', (e) => {
+    // Sidebar toggle
+    document.getElementById('sidebarToggleBtn').addEventListener('click', (e) => {
+        e.stopPropagation();
+        sidebar.classList.toggle('hidden');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !document.getElementById('sidebarToggleBtn').contains(e.target)) {
+            sidebar.classList.add('hidden');
+        }
+    });
+
+    // Multi-select mode (right sidebar)
+    document.getElementById('multiSelectModeRight').addEventListener('change', (e) => {
         multiSelectMode = e.target.checked;
         if (!multiSelectMode) {
             selectedDates = [];
-            document.getElementById('selectedDatesContainer').style.display = 'none';
+            document.getElementById('selectedDatesContainerRight').style.display = 'none';
             renderCalendar();
         }
     });
 
-    document.getElementById('clearSelectionBtn').addEventListener('click', () => {
+    document.getElementById('clearSelectionBtnRight').addEventListener('click', () => {
         selectedDates = [];
         updateMultiSelectDisplay();
         renderCalendar();
     });
 
-    document.getElementById('sidebarToggle').addEventListener('click', (e) => {
-        e.stopPropagation();
-        sidebar.classList.toggle('hidden');
-    });
-
-    document.getElementById('sidebarClose').addEventListener('click', () => {
-        sidebar.classList.add('hidden');
-    });
-
-    document.addEventListener('click', (e) => {
-        if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !document.getElementById('sidebarToggle').contains(e.target)) {
-            sidebar.classList.add('hidden');
-        }
-    });
-
-
+    // Calendar view tabs
     document.getElementById('monthViewTab').addEventListener('click', () => {
         switchView('month');
     });
@@ -429,6 +617,7 @@ function attachEventListeners() {
         switchView('year');
     });
 
+    // Month navigation
     document.getElementById('prevMonth').addEventListener('click', () => {
         currentDate.setMonth(currentDate.getMonth() - 1);
         renderCalendar();
@@ -439,7 +628,7 @@ function attachEventListeners() {
         renderCalendar();
     });
 
-
+    // Year navigation
     document.getElementById('prevYear').addEventListener('click', () => {
         currentYear--;
         renderYearView();
@@ -450,40 +639,52 @@ function attachEventListeners() {
         renderYearView();
     });
 
-
-    document.getElementById('setHolidayBtn').addEventListener('click', () => {
-        totalHolidays = parseInt(document.getElementById('totalHolidays').value) || 20;
+    // Holiday allowance setting (right sidebar)
+    document.getElementById('setHolidayBtnRight').addEventListener('click', () => {
+        totalHolidays = parseInt(document.getElementById('totalHolidaysInput').value) || 20;
         updateStats();
+        updateDashboard();
         saveToLocalStorage();
     });
 
-
+    // Color picker buttons (right sidebar)
     document.querySelectorAll('.color-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            document.getElementById('holidayColor').value = e.target.dataset.color;
+            document.getElementById('holidayColorRight').value = e.target.dataset.color;
         });
     });
 
-    document.getElementById('assignHolidayBtn').addEventListener('click', assignHoliday);
+    // Assign holiday button (right sidebar)
+    document.getElementById('assignHolidayBtnRight').addEventListener('click', assignHoliday);
 
-    document.getElementById('clearAllBtn').addEventListener('click', () => {
+    // Clear all button (right sidebar)
+    document.getElementById('clearAllBtnRight').addEventListener('click', () => {
         if (confirm('Are you sure you want to clear all holidays?')) {
             holidays = {};
             selectedDate = null;
             selectedDates = [];
-            document.getElementById('selectedDate').value = '';
-            document.getElementById('multiSelectMode').checked = false;
+            document.getElementById('selectedDateRight').value = '';
+            document.getElementById('multiSelectModeRight').checked = false;
             multiSelectMode = false;
-            document.getElementById('selectedDatesContainer').style.display = 'none';
+            document.getElementById('selectedDatesContainerRight').style.display = 'none';
             renderCalendar();
             renderYearView();
-            updateHolidayList();
+            updateHolidayListRight();
             updateStats();
+            updateDashboard();
+            updateTimeOffTable();
             saveToLocalStorage();
         }
     });
 
-    document.getElementById('exportBtn').addEventListener('click', exportSchedule);
+    // Export button (right sidebar)
+    document.getElementById('exportBtnRight').addEventListener('click', exportSchedule);
+
+    // Filter select on dashboard
+    const filterTimeOff = document.getElementById('filterTimeOff');
+    if (filterTimeOff) {
+        filterTimeOff.addEventListener('change', updateTimeOffTable);
+    }
 }
 
 // Assign holiday to selected date(s)
@@ -504,32 +705,39 @@ function assignHoliday() {
         datesToAssign = [selectedDate];
     }
 
-    const label = document.getElementById('holidayLabel').value || 'Holiday';
-    const color = document.getElementById('holidayColor').value;
-    const dayType = document.getElementById('dayType').value;
+    const label = document.getElementById('holidayLabelRight').value || 'Holiday';
+    const color = document.getElementById('holidayColorRight').value;
+    const dayType = document.getElementById('dayTypeRight').value;
 
     datesToAssign.forEach(dateStr => {
         holidays[dateStr] = { label, color, type: dayType };
     });
     
-    document.getElementById('holidayLabel').value = '';
-    document.getElementById('holidayColor').value = '#4ecdc4';
-    document.getElementById('dayType').value = 'holiday';
+    document.getElementById('holidayLabelRight').value = '';
+    document.getElementById('holidayColorRight').value = '#4ecdc4';
+    document.getElementById('dayTypeRight').value = 'holiday';
     
     if (multiSelectMode) {
         selectedDates = [];
-        document.getElementById('multiSelectMode').checked = false;
+        document.getElementById('multiSelectModeRight').checked = false;
         multiSelectMode = false;
-        document.getElementById('selectedDatesContainer').style.display = 'none';
+        document.getElementById('selectedDatesContainerRight').style.display = 'none';
     } else {
         selectedDate = null;
-        document.getElementById('selectedDate').value = '';
+        document.getElementById('selectedDateRight').value = '';
     }
 
     renderCalendar();
     renderYearView();
-    updateHolidayList();
+    updateHolidayListRight();
     updateStats();
+    updateDashboard();
+    renderCalendar();
+    renderYearView();
+    updateHolidayListRight();
+    updateStats();
+    updateDashboard();
+    updateTimeOffTable();
     saveToLocalStorage();
 }
 
@@ -538,22 +746,24 @@ function removeHoliday(dateStr) {
     delete holidays[dateStr];
     if (selectedDate === dateStr) {
         selectedDate = null;
-        document.getElementById('selectedDate').value = '';
+        document.getElementById('selectedDateRight').value = '';
     }
     renderCalendar();
     renderYearView();
-    updateHolidayList();
+    updateHolidayListRight();
     updateStats();
+    updateDashboard();
+    updateTimeOffTable();
     saveToLocalStorage();
 }
 
-// Update holiday list
-function updateHolidayList() {
-    const list = document.getElementById('holidayList');
+// Update holiday list (right sidebar)
+function updateHolidayListRight() {
+    const list = document.getElementById('holidayListRight');
     const sortedDates = Object.keys(holidays).sort();
 
     if (sortedDates.length === 0) {
-        list.innerHTML = '<p class="empty-state">No holidays assigned yet</p>';
+        list.innerHTML = '<p class="empty-state">No leave assigned</p>';
         return;
     }
 
@@ -583,10 +793,7 @@ function updateStats() {
     
     const remainingDays = totalHolidays - usedDays;
 
-    document.getElementById('totalDaysValue').textContent = totalHolidays;
-    document.getElementById('usedDaysValue').textContent = usedDays;
-    document.getElementById('remainingDaysValue').textContent = Math.max(0, remainingDays);
-    document.getElementById('totalHolidays').value = totalHolidays;
+    document.getElementById('totalHolidaysInput').value = totalHolidays;
 }
 
 // Export schedule as text
