@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
     updateTimeOffTable();
 
     if (window.innerWidth <= 768) {
-        document.getElementById('sidebar').classList.add('hidden');
+        document.getElementById('sidebar').classList.add('collapsed');
     }
 });
 
@@ -83,11 +83,13 @@ function switchMainView(viewName) {
         if (viewName === 'dashboard') {
             updateDashboard();
             updateTimeOffTable();
+        } else if (viewName === 'attendance') {
+            initializeAttendanceView();
         }
     }
     
     if (window.innerWidth <= 768) {
-        document.getElementById('sidebar').classList.add('hidden');
+        document.getElementById('sidebar').classList.add('collapsed');
     }
 }
 
@@ -101,8 +103,7 @@ function updateDashboard() {
     const availableDays = Math.max(0, totalHolidays - usedHolidayDays);
     const sickDaysList = Object.keys(holidays).filter(dateStr => holidays[dateStr].type === 'sick');
     const sickDayCount = sickDaysList.length;
-    
-    // Estimate sick periods as groups of consecutive days until corrrect implementation
+
     let sickPeriods = 0;
     if (sickDayCount > 0) {
         const sortedSickDates = sickDaysList.sort();
@@ -124,16 +125,43 @@ function updateDashboard() {
     document.getElementById('dashSickPeriods').textContent = sickPeriods;
     document.getElementById('dashSickDays').textContent = sickDayCount;
     
-    const totalDaysInYear = 365;
-    const daysOff = Object.keys(holidays).length;
-    const attendanceDays = totalDaysInYear - daysOff;
-    const attendancePercentage = Math.round((attendanceDays / totalDaysInYear) * 100);
+    // Calculate current month attendance percentage
+    const now = new Date();
+    const monthAttendancePercentage = calculateMonthlyAttendancePercentage(now.getFullYear(), now.getMonth());
     
-    document.getElementById('attendancePercentage').textContent = attendancePercentage + '%';
+    document.getElementById('attendancePercentage').textContent = monthAttendancePercentage + '%';
     
     const canvas = document.getElementById('attendanceChart');
     if (canvas) {
-        drawPieChart(canvas, attendancePercentage);
+        drawPieChart(canvas, monthAttendancePercentage);
+    }
+    
+    // Draw dashboard pie charts
+    updateDashboardPieCharts();
+}
+
+// Update dashboard dual pie charts
+function updateDashboardPieCharts() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    
+    // Draw projected chart (full month)
+    const projectedStats = drawAttendancePieChart('dashProjectedChart', year, month, false);
+    if (projectedStats) {
+        document.getElementById('dashProjectedOffice').textContent = projectedStats.officeCount;
+        document.getElementById('dashProjectedHoliday').textContent = projectedStats.holidayCount;
+        document.getElementById('dashProjectedSick').textContent = projectedStats.sickCount;
+        document.getElementById('dashProjectedUnselected').textContent = projectedStats.unselectedCount;
+    }
+    
+    // Draw current chart (up to today)
+    const currentStats = drawAttendancePieChart('dashCurrentChart', year, month, true);
+    if (currentStats) {
+        document.getElementById('dashCurrentOffice').textContent = currentStats.officeCount;
+        document.getElementById('dashCurrentHoliday').textContent = currentStats.holidayCount;
+        document.getElementById('dashCurrentSick').textContent = currentStats.sickCount;
+        document.getElementById('dashCurrentUnselected').textContent = currentStats.unselectedCount;
     }
 }
 
@@ -583,12 +611,12 @@ function attachEventListeners() {
     // Sidebar toggle
     document.getElementById('sidebarToggleBtn').addEventListener('click', (e) => {
         e.stopPropagation();
-        sidebar.classList.toggle('hidden');
+        sidebar.classList.toggle('collapsed');
     });
 
     document.addEventListener('click', (e) => {
         if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !document.getElementById('sidebarToggleBtn').contains(e.target)) {
-            sidebar.classList.add('hidden');
+            sidebar.classList.add('collapsed');
         }
     });
 
@@ -843,12 +871,452 @@ function exportSchedule() {
     window.URL.revokeObjectURL(url);
 }
 
+// ==================== ATTENDANCE VIEW FUNCTIONALITY ====================
+
+let attendanceData = {}; 
+let currentAttendanceMonth = new Date();
+let selectedAttendanceDates = [];
+let attendanceConfig = {
+    requiredDaysType: 'percentage',
+    requiredDaysValue: 100,
+    countBankHolidays: true,
+    countAnnualLeave: true,
+    countSickDays: true
+};
+
+function initializeAttendanceView() {
+    // Set up event listeners for attendance controls
+    const requiredDaysInput = document.getElementById('requiredDaysValue');
+    const requiredDaysType = document.getElementById('requiredDaysType');
+    const countBankHolidaysCheckbox = document.getElementById('countBankHolidays');
+    const countAnnualLeaveCheckbox = document.getElementById('countAnnualLeave');
+    const countSickDaysCheckbox = document.getElementById('countSickDays');
+
+    // Restore form values from attendanceConfig
+    if (requiredDaysInput) {
+        requiredDaysInput.value = attendanceConfig.requiredDaysValue;
+    }
+    if (requiredDaysType) {
+        requiredDaysType.value = attendanceConfig.requiredDaysType;
+    }
+    if (countBankHolidaysCheckbox) {
+        countBankHolidaysCheckbox.checked = attendanceConfig.countBankHolidays;
+    }
+    if (countAnnualLeaveCheckbox) {
+        countAnnualLeaveCheckbox.checked = attendanceConfig.countAnnualLeave;
+    }
+    if (countSickDaysCheckbox) {
+        countSickDaysCheckbox.checked = attendanceConfig.countSickDays;
+    }
+
+    if (requiredDaysInput) {
+        requiredDaysInput.addEventListener('change', () => {
+            attendanceConfig.requiredDaysValue = parseInt(requiredDaysInput.value);
+            saveToLocalStorage();
+            updateAttendanceStats();
+            updateDashboard();
+        });
+        requiredDaysInput.addEventListener('input', () => {
+            attendanceConfig.requiredDaysValue = parseInt(requiredDaysInput.value);
+            saveToLocalStorage();
+            updateAttendanceStats();
+            updateDashboard();
+        });
+    }
+
+    if (requiredDaysType) {
+        requiredDaysType.addEventListener('change', (e) => {
+            attendanceConfig.requiredDaysType = e.target.value;
+            const label = document.querySelector('label[for="requiredDaysValue"]');
+            if (label) {
+                label.textContent = e.target.value === 'days' ? 'Required Days' : 'Required Percentage';
+            }
+            saveToLocalStorage();
+            updateAttendanceStats();
+            updateDashboard();
+        });
+    }
+
+    if (countBankHolidaysCheckbox) {
+        countBankHolidaysCheckbox.addEventListener('change', () => {
+            attendanceConfig.countBankHolidays = countBankHolidaysCheckbox.checked;
+            saveToLocalStorage();
+            updateAttendanceStats();
+            updateDashboard();
+        });
+    }
+    if (countAnnualLeaveCheckbox) {
+        countAnnualLeaveCheckbox.addEventListener('change', () => {
+            attendanceConfig.countAnnualLeave = countAnnualLeaveCheckbox.checked;
+            saveToLocalStorage();
+            updateAttendanceStats();
+            updateDashboard();
+        });
+    }
+    if (countSickDaysCheckbox) {
+        countSickDaysCheckbox.addEventListener('change', () => {
+            attendanceConfig.countSickDays = countSickDaysCheckbox.checked;
+            saveToLocalStorage();
+            updateAttendanceStats();
+            updateDashboard();
+        });
+    }
+
+    // Month navigation
+    const prevMonthBtn = document.getElementById('attendancePrevMonth');
+    const nextMonthBtn = document.getElementById('attendanceNextMonth');
+
+    if (prevMonthBtn) {
+        prevMonthBtn.addEventListener('click', () => {
+            currentAttendanceMonth.setMonth(currentAttendanceMonth.getMonth() - 1);
+            saveToLocalStorage();
+            renderAttendanceCalendar();
+            updateAttendanceStats();
+            updateDashboard();
+        });
+    }
+
+    if (nextMonthBtn) {
+        nextMonthBtn.addEventListener('click', () => {
+            currentAttendanceMonth.setMonth(currentAttendanceMonth.getMonth() + 1);
+            saveToLocalStorage();
+            renderAttendanceCalendar();
+            updateAttendanceStats();
+            updateDashboard();
+        });
+    }
+
+    // Day type buttons
+    const markOfficeBtn = document.getElementById('markOfficeBtn');
+    const markRemoteBtn = document.getElementById('markRemoteBtn');
+    const markSickBtn = document.getElementById('markSickBtn');
+    const markAnnualLeaveBtn = document.getElementById('markAnnualLeaveBtn');
+    const clearSelectionBtn = document.getElementById('clearSelectionBtn');
+
+    if (markOfficeBtn) markOfficeBtn.addEventListener('click', () => markSelectedDays('office'));
+    if (markRemoteBtn) markRemoteBtn.addEventListener('click', () => markSelectedDays('remote'));
+    if (markSickBtn) markSickBtn.addEventListener('click', () => markSelectedDays('sick'));
+    if (markAnnualLeaveBtn) markAnnualLeaveBtn.addEventListener('click', () => markSelectedDays('leave'));
+    if (clearSelectionBtn) clearSelectionBtn.addEventListener('click', () => clearSelectedDays());
+
+    // Initialize month selector dropdown
+    populateMonthSelector();
+    handleMonthSelection();
+
+    // Initialize calendar
+    initializeAttendanceDataWithDefaults();
+    renderAttendanceCalendar();
+    updateAttendanceStats();
+    updateAttendanceCharts();
+}
+
+function initializeAttendanceDataWithDefaults() {
+    // Initialize all days as 'remote' if not already set
+    const year = currentAttendanceMonth.getFullYear();
+    const month = currentAttendanceMonth.getMonth();
+    
+    // Get all days in the month
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    
+    for (let day = 1; day <= lastDay.getDate(); day++) {
+        const dateStr = formatDateToString(new Date(year, month, day));
+        if (!(dateStr in attendanceData)) {
+            attendanceData[dateStr] = 'remote';
+        }
+    }
+    
+    // Add bank holidays
+    insertBankHolidaysIntoAttendance(year);
+}
+
+function insertBankHolidaysIntoAttendance(year) {
+    const yearStr = year.toString();
+    if (UK_BANK_HOLIDAYS[yearStr]) {
+        UK_BANK_HOLIDAYS[yearStr].forEach(holiday => {
+            attendanceData[holiday.date] = 'bank-holiday';
+        });
+    }
+}
+
+function renderAttendanceCalendar() {
+    const year = currentAttendanceMonth.getFullYear();
+    const month = currentAttendanceMonth.getMonth();
+
+    // Update header
+    const header = document.querySelector('.attendance-calendar .calendar-nav h2');
+    if (header) {
+        header.textContent = currentAttendanceMonth.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    }
+
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    let startDate = firstDay.getDay();
+    
+    startDate = startDate === 0 ? 6 : startDate - 1;
+
+    const gridContainer = document.getElementById('attendanceGridContainer');
+    gridContainer.innerHTML = '';
+
+    // Add previous month's days
+    const prevMonth = month === 0 ? 11 : month - 1;
+    const prevYear = month === 0 ? year - 1 : year;
+    const daysInPrevMonth = new Date(prevYear, prevMonth + 1, 0).getDate();
+
+    for (let i = startDate - 1; i >= 0; i--) {
+        const day = daysInPrevMonth - i;
+        const date = new Date(prevYear, prevMonth, day);
+        createAttendanceDayElement(gridContainer, day, date, true);
+    }
+
+    // Add current month's days
+    for (let day = 1; day <= daysInMonth; day++) {
+        const date = new Date(year, month, day);
+        createAttendanceDayElement(gridContainer, day, date, false);
+    }
+
+    // Add next month's days
+    let nextDayCounter = 1;
+    const totalCells = gridContainer.children.length;
+    const remainingCells = 42 - totalCells;
+    const nextMonth = month === 11 ? 0 : month + 1;
+    const nextYear = month === 11 ? year + 1 : year;
+
+    for (let i = 0; i < remainingCells; i++) {
+        const date = new Date(nextYear, nextMonth, nextDayCounter);
+        createAttendanceDayElement(gridContainer, nextDayCounter, date, true);
+        nextDayCounter++;
+    }
+}
+
+function createAttendanceDayElement(container, day, date, isOtherMonth) {
+    const dateStr = formatDateToString(date);
+    const dayElement = document.createElement('div');
+    dayElement.className = 'attendance-day';
+    
+    if (isOtherMonth) {
+        dayElement.classList.add('other-month');
+    }
+
+    const dayOfWeek = date.getDay();
+    const adjustedDay = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    if (adjustedDay === 5 || adjustedDay === 6) {
+        dayElement.classList.add('weekend');
+    }
+
+    // Add day type class and label
+    const dayType = attendanceData[dateStr] || 'remote';
+    dayElement.classList.add(dayType);
+
+    let typeLabel = '';
+    switch (dayType) {
+        case 'office': typeLabel = 'Office'; break;
+        case 'remote': typeLabel = 'Remote'; break;
+        case 'sick': typeLabel = 'Sick'; break;
+        case 'leave': typeLabel = 'Leave'; break;
+        case 'bank-holiday': typeLabel = 'Bank Holiday'; break;
+    }
+
+    // Check if selected
+    if (selectedAttendanceDates.includes(dateStr)) {
+        dayElement.classList.add('selected');
+    }
+
+    const dayNumber = document.createElement('div');
+    dayNumber.className = 'day-number';
+    dayNumber.textContent = day;
+    dayElement.appendChild(dayNumber);
+
+    const label = document.createElement('div');
+    label.className = 'day-label';
+    label.textContent = typeLabel;
+    dayElement.appendChild(label);
+
+    if (!isOtherMonth && dayOfWeek !== 0 && dayOfWeek !== 6) { // Not weekend
+        dayElement.addEventListener('click', (e) => {
+            if (e.shiftKey) {
+                // Range select
+                if (selectedAttendanceDates.length > 0) {
+                    const lastSelected = selectedAttendanceDates[selectedAttendanceDates.length - 1];
+                    const dateA = new Date(lastSelected);
+                    const dateB = new Date(dateStr);
+                    const rangeStart = dateA < dateB ? dateA : dateB;
+                    const rangeEnd = dateA > dateB ? dateA : dateB;
+
+                    selectedAttendanceDates = [];
+                    for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
+                        selectedAttendanceDates.push(formatDateToString(new Date(d)));
+                    }
+                } else {
+                    selectedAttendanceDates.push(dateStr);
+                }
+            } else {
+                // Toggle selection
+                if (selectedAttendanceDates.includes(dateStr)) {
+                    selectedAttendanceDates = selectedAttendanceDates.filter(d => d !== dateStr);
+                } else {
+                    selectedAttendanceDates.push(dateStr);
+                }
+            }
+            renderAttendanceCalendar();
+        });
+    }
+
+    container.appendChild(dayElement);
+}
+
+function markSelectedDays(type) {
+    if (selectedAttendanceDates.length === 0) return;
+
+    selectedAttendanceDates.forEach(dateStr => {
+        attendanceData[dateStr] = type;
+    });
+
+    selectedAttendanceDates = [];
+    saveToLocalStorage();
+    renderAttendanceCalendar();
+    updateAttendanceStats();
+    updateDashboard();
+}
+
+
+function clearSelectedDays() {
+    selectedAttendanceDates = [];
+    renderAttendanceCalendar();
+}
+
+function calculateWeekdays(year, month) {
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    let weekdayCount = 0;
+
+    for (let day = 1; day <= lastDay.getDate(); day++) {
+        const date = new Date(year, month, day);
+        const dayOfWeek = date.getDay();
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Not weekend
+            weekdayCount++;
+        }
+    }
+
+    return weekdayCount;
+}
+
+function calculateMonthlyAttendancePercentage(year, month) {
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    let offDaysCount = 0;
+    let weekdayCount = 0;
+
+    for (let day = 1; day <= lastDay.getDate(); day++) {
+        const date = new Date(year, month, day);
+        const dayOfWeek = date.getDay();
+        
+        // Only count weekdays
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            weekdayCount++;
+            
+            const dateStr = formatDateToString(date);
+            const dayType = attendanceData[dateStr] || 'remote';
+            
+            // Count non-office days as "off"
+            if (dayType !== 'office') {
+                offDaysCount++;
+            }
+        }
+    }
+
+    if (weekdayCount === 0) return 100;
+    
+    const attendanceDays = weekdayCount - offDaysCount;
+    const percentage = Math.round((attendanceDays / weekdayCount) * 100);
+    return percentage;
+}
+
+function calculateRequiredDays() {
+    const year = currentAttendanceMonth.getFullYear();
+    const month = currentAttendanceMonth.getMonth();
+    
+    const totalWeekdays = calculateWeekdays(year, month);
+    
+    let requiredDaysValue = attendanceConfig.requiredDaysValue;
+    const type = attendanceConfig.requiredDaysType;
+
+    // Count days of each type
+    const bankHolidayCount = Object.keys(attendanceData).filter(dateStr => {
+        const date = new Date(dateStr);
+        return date.getMonth() === month && date.getFullYear() === year && attendanceData[dateStr] === 'bank-holiday';
+    }).length;
+
+    const annualLeaveCount = Object.keys(attendanceData).filter(dateStr => {
+        const date = new Date(dateStr);
+        return date.getMonth() === month && date.getFullYear() === year && attendanceData[dateStr] === 'leave';
+    }).length;
+
+    const sickDaysCount = Object.keys(attendanceData).filter(dateStr => {
+        const date = new Date(dateStr);
+        return date.getMonth() === month && date.getFullYear() === year && attendanceData[dateStr] === 'sick';
+    }).length;
+
+    // Calculate available days based on which categories count
+    let availableDays = totalWeekdays;
+    if (!attendanceConfig.countBankHolidays) {
+        availableDays -= bankHolidayCount;
+    }
+    if (!attendanceConfig.countAnnualLeave) {
+        availableDays -= annualLeaveCount;
+    }
+    if (!attendanceConfig.countSickDays) {
+        availableDays -= sickDaysCount;
+    }
+
+    // Calculate required days based on percentage or absolute number
+    let requiredDays = requiredDaysValue;
+    if (type === 'percentage') {
+        requiredDays = Math.ceil((requiredDaysValue / 100) * availableDays);
+    }
+
+    return {
+        totalWeekdays,
+        requiredDays: Math.max(0, requiredDays),
+        availableDays
+    };
+}
+
+function updateAttendanceStats() {
+    const year = currentAttendanceMonth.getFullYear();
+    const month = currentAttendanceMonth.getMonth();
+    
+    const stats = calculateRequiredDays();
+    
+    document.getElementById('totalWeekdaysCount').textContent = stats.totalWeekdays;
+    document.getElementById('requiredDaysCount').textContent = stats.requiredDays;
+
+    // Count office days met
+    const officeDaysMet = Object.keys(attendanceData).filter(dateStr => {
+        const date = new Date(dateStr);
+        const dayOfWeek = date.getDay();
+        return date.getMonth() === month && 
+               date.getFullYear() === year && 
+               attendanceData[dateStr] === 'office' &&
+               dayOfWeek !== 0 && dayOfWeek !== 6; // Exclude weekends
+    }).length;
+
+    document.getElementById('officeDaysMet').textContent = officeDaysMet + ' / ' + stats.requiredDays;
+    
+    // Update the pie charts
+    updateAttendanceCharts();
+}
+
 // Local Storage functions
 function saveToLocalStorage() {
     const data = {
         totalHolidays,
         holidays,
-        selectedDate
+        selectedDate,
+        attendanceData,
+        attendanceConfig,
+        currentAttendanceMonth: currentAttendanceMonth.toISOString()
     };
     localStorage.setItem('holidayPlannerData', JSON.stringify(data));
 }
@@ -861,8 +1329,185 @@ function loadFromLocalStorage() {
             totalHolidays = parsed.totalHolidays || 20;
             holidays = parsed.holidays || {};
             selectedDate = parsed.selectedDate || null;
+            attendanceData = parsed.attendanceData || {};
+            if (parsed.attendanceConfig) {
+                attendanceConfig = parsed.attendanceConfig;
+            }
+            if (parsed.currentAttendanceMonth) {
+                currentAttendanceMonth = new Date(parsed.currentAttendanceMonth);
+            }
         } catch (e) {
             console.error('Error loading data:', e);
         }
     }
+}
+
+// ==================== DUAL PIE CHART FUNCTIONS ====================
+
+function populateMonthSelector() {
+    const selector = document.getElementById('attendanceMonthSelector');
+    if (!selector) return;
+    
+    selector.innerHTML = '';
+    const currentDate = new Date();
+    const startDate = new Date(currentDate.getFullYear() - 2, 0, 1); // Go back 2 years
+    
+    for (let date = new Date(startDate); date <= new Date(currentDate.getFullYear() + 1, 11, 31); date.setMonth(date.getMonth() + 1)) {
+        const year = date.getFullYear();
+        const month = date.getMonth();
+        const monthName = date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+        const option = document.createElement('option');
+        option.value = `${year}-${month}`;
+        option.textContent = monthName;
+        
+        // Select current month by default
+        if (year === currentAttendanceMonth.getFullYear() && month === currentAttendanceMonth.getMonth()) {
+            option.selected = true;
+        }
+        
+        selector.appendChild(option);
+    }
+}
+
+function handleMonthSelection() {
+    const selector = document.getElementById('attendanceMonthSelector');
+    if (!selector) return;
+    
+    selector.addEventListener('change', (e) => {
+        const [year, month] = e.target.value.split('-').map(Number);
+        currentAttendanceMonth = new Date(year, month, 1);
+        saveToLocalStorage();
+        renderAttendanceCalendar();
+        updateAttendanceStats();
+        updateDashboard();
+    });
+}
+
+function drawAttendancePieChart(canvasId, year, month, includeUnpast = false) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    const centerX = canvas.width / 2;
+    const centerY = canvas.height / 2;
+    const radius = Math.min(centerX, centerY) - 10;
+    
+    // Calculate cutoff date for "current" chart
+    let endDate;
+    if (includeUnpast) {
+        const today = new Date();
+        endDate = today.getDate();
+    } else {
+        const lastDay = new Date(year, month + 1, 0);
+        endDate = lastDay.getDate();
+    }
+    
+    // Count day types for weekdays only
+    let officeCount = 0;
+    let holidayCount = 0;
+    let sickCount = 0;
+    let unselectedCount = 0;
+    
+    for (let day = 1; day <= endDate; day++) {
+        const date = new Date(year, month, day);
+        const dayOfWeek = date.getDay();
+        
+        // Only count weekdays
+        if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+            const dateStr = formatDateToString(date);
+            const dayType = attendanceData[dateStr] || null;
+            
+            if (dayType === 'office') {
+                officeCount++;
+            } else if (dayType === 'leave') {
+                holidayCount++;
+            } else if (dayType === 'sick') {
+                sickCount++;
+            } else if (dayType === 'bank-holiday') {
+                holidayCount++;
+            } else {
+                unselectedCount++;
+            }
+        }
+    }
+    
+    const total = officeCount + holidayCount + sickCount + unselectedCount;
+    if (total === 0) return;
+    
+    // Calculate angles
+    const officeAngle = (officeCount / total) * 2 * Math.PI;
+    const holidayAngle = (holidayCount / total) * 2 * Math.PI;
+    const sickAngle = (sickCount / total) * 2 * Math.PI;
+    const unselectedAngle = (unselectedCount / total) * 2 * Math.PI;
+    
+    // Colors
+    const colors = {
+        office: '#4ecdc4',      // Teal/cyan
+        holiday: '#ff6b6b',     // Red
+        sick: '#ffa500',        // Orange
+        unselected: '#e0e0e0'   // Light gray
+    };
+    
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw pie slices
+    let currentAngle = -Math.PI / 2; // Start from top
+    
+    // Office days
+    if (officeCount > 0) {
+        ctx.fillStyle = colors.office;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + officeAngle);
+        ctx.closePath();
+        ctx.fill();
+        currentAngle += officeAngle;
+    }
+    
+    // Holiday days
+    if (holidayCount > 0) {
+        ctx.fillStyle = colors.holiday;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + holidayAngle);
+        ctx.closePath();
+        ctx.fill();
+        currentAngle += holidayAngle;
+    }
+    
+    // Sick days
+    if (sickCount > 0) {
+        ctx.fillStyle = colors.sick;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + sickAngle);
+        ctx.closePath();
+        ctx.fill();
+        currentAngle += sickAngle;
+    }
+    
+    // Unselected days
+    if (unselectedCount > 0) {
+        ctx.fillStyle = colors.unselected;
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + unselectedAngle);
+        ctx.closePath();
+        ctx.fill();
+    }
+    
+    // Draw border
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+    ctx.stroke();
+    
+    // Return counts for stats display
+    return { officeCount, holidayCount, sickCount, unselectedCount };
+}
+
+function updateAttendanceCharts() {
+    // This function is kept for compatibility but pie charts have been removed from attendance page
 }

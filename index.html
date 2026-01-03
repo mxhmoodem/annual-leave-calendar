@@ -11,14 +11,20 @@
         <!-- Main Navigation Sidebar -->
         <aside id="sidebar" class="sidebar">
             <div class="sidebar-header">
-                <span id="userInitials" class="user-initials">JD</span>
-                <button id="sidebarToggleBtn" class="sidebar-toggle-btn">Menu</button>
+                <img src="images/logo.png" alt="Logo" class="sidebar-logo">
+                <button id="sidebarToggleBtn" class="sidebar-toggle-btn" aria-label="Toggle sidebar">
+                    <span class="burger-icon">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                    </span>
+                </button>
             </div>
 
             <nav class="sidebar-nav">
-                <button class="nav-item active" data-view="dashboard">Dashboard</button>
-                <button class="nav-item" data-view="calendar">Leave Calendar</button>
-                <button class="nav-item" data-view="attendance">Attendance</button>
+                <button class="nav-item active" data-view="dashboard"><img src="images/dashboard.png" alt="" class="nav-icon"><span class="nav-text">Dashboard</span></button>
+                <button class="nav-item" data-view="calendar"><img src="images/calender.png" alt="" class="nav-icon"><span class="nav-text">Leave Calendar</span></button>
+                <button class="nav-item" data-view="attendance"><img src="images/attendance.png" alt="" class="nav-icon"><span class="nav-text">Attendance</span></button>
             </nav>
         </aside>
 
@@ -26,13 +32,13 @@
         <main class="main-view">
             <!-- Dashboard View -->
             <div id="dashboardView" class="view-container active">
+                <div class="section-header">
+                    <h1>Dashboard</h1>
+                </div>
+
                 <div class="dashboard-layout">
                     <!-- Main Content (Left) -->
                     <div class="dashboard-main">
-                        <div class="section-header">
-                            <h1>Dashboard</h1>
-                        </div>
-
                         <!-- Stats Cards Row -->
                         <div class="stats-grid">
                             <div class="stat-card">
@@ -80,6 +86,30 @@
                                         <canvas id="attendanceChart" width="100" height="100"></canvas>
                                     </div>
                                     <span class="attendance-percentage" id="attendancePercentage">95%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dashboard Attendance Pie Charts -->
+                        <div class="dashboard-pie-charts">
+                            <div class="pie-chart-card">
+                                <h4>Projected (Full Month)</h4>
+                                <canvas id="dashProjectedChart" width="120" height="120"></canvas>
+                                <div class="pie-chart-stats">
+                                    <div class="pie-stat"><span class="pie-stat-color office"></span> Office: <strong id="dashProjectedOffice">0</strong></div>
+                                    <div class="pie-stat"><span class="pie-stat-color holiday"></span> Holiday: <strong id="dashProjectedHoliday">0</strong></div>
+                                    <div class="pie-stat"><span class="pie-stat-color sick"></span> Sick: <strong id="dashProjectedSick">0</strong></div>
+                                    <div class="pie-stat"><span class="pie-stat-color unselected"></span> Unselected: <strong id="dashProjectedUnselected">0</strong></div>
+                                </div>
+                            </div>
+                            <div class="pie-chart-card">
+                                <h4>Current (Up to Today)</h4>
+                                <canvas id="dashCurrentChart" width="120" height="120"></canvas>
+                                <div class="pie-chart-stats">
+                                    <div class="pie-stat"><span class="pie-stat-color office"></span> Office: <strong id="dashCurrentOffice">0</strong></div>
+                                    <div class="pie-stat"><span class="pie-stat-color holiday"></span> Holiday: <strong id="dashCurrentHoliday">0</strong></div>
+                                    <div class="pie-stat"><span class="pie-stat-color sick"></span> Sick: <strong id="dashCurrentSick">0</strong></div>
+                                    <div class="pie-stat"><span class="pie-stat-color unselected"></span> Unselected: <strong id="dashCurrentUnselected">0</strong></div>
                                 </div>
                             </div>
                         </div>
@@ -200,12 +230,12 @@
 
             <!-- Leave Calendar View -->
             <div id="calendarView" class="view-container">
+                <div class="section-header">
+                    <h1>Leave Calendar</h1>
+                </div>
+
                 <div class="calendar-layout">
                     <div class="calendar-main">
-                        <div class="section-header">
-                            <h1>Leave Calendar</h1>
-                        </div>
-
                         <div class="view-tabs">
                             <button id="monthViewTab" class="tab-btn active" data-view="month">Month</button>
                             <button id="yearViewTab" class="tab-btn" data-view="year">Year</button>
@@ -270,8 +300,110 @@
                 <div class="section-header">
                     <h1>Attendance</h1>
                 </div>
-                <div class="empty-state-container">
-                    <p>Attendance tracking coming soon</p>
+
+                <div class="attendance-layout">
+                    <!-- Left Panel: Configuration -->
+                    <aside class="attendance-config">
+                        <div class="config-section">
+                            <h3>Select Month & Year</h3>
+                            <div class="form-group">
+                                <label for="attendanceMonthSelector">Month/Year:</label>
+                                <div class="date-selector">
+                                    <select id="attendanceMonthSelector">
+                                        <!-- Populated by JavaScript -->
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="config-section">
+                            <h3>Required Days in Office</h3>
+                            
+                            <div class="form-group">
+                                <label for="requiredDaysType">Calculate by:</label>
+                                <select id="requiredDaysType">
+                                    <option value="days">Number of Days</option>
+                                    <option value="percentage">Percentage</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="requiredDaysValue">
+                                    <span id="requiredDaysLabel">Required Days:</span>
+                                </label>
+                                <input type="number" id="requiredDaysValue" min="0" value="15">
+                            </div>
+
+                            <div class="config-box">
+                                <label>
+                                    <input type="checkbox" id="countBankHolidays" checked>
+                                    <span>Count Bank Holidays toward office days</span>
+                                </label>
+                            </div>
+
+                            <div class="config-box">
+                                <label>
+                                    <input type="checkbox" id="countAnnualLeave" checked>
+                                    <span>Count Annual Leave toward office days</span>
+                                </label>
+                            </div>
+
+                            <div class="config-box">
+                                <label>
+                                    <input type="checkbox" id="countSickDays" checked>
+                                    <span>Count Sick Days toward office days</span>
+                                </label>
+                            </div>
+
+                            <div class="stats-box">
+                                <h4>Attendance Statistics</h4>
+                                <div class="stat-line">
+                                    <span>Total Weekdays:</span>
+                                    <strong id="totalWeekdaysCount">22</strong>
+                                </div>
+                                <div class="stat-line">
+                                    <span>Required Days:</span>
+                                    <strong id="requiredDaysCount">15</strong>
+                                </div>
+                                <div class="stat-line highlighted">
+                                    <span>Office Days Met:</span>
+                                    <strong id="officeDaysMet">0 / 15</strong>
+                                </div>
+                            </div>
+                        <div class="config-section">
+                            <h3>Mark Selected Days</h3>
+                            <div class="day-selector-inline">
+                                <div class="button-group">
+                                    <button id="markOfficeBtn" class="day-type-btn office">Office Day</button>
+                                    <button id="markRemoteBtn" class="day-type-btn remote">Remote Work</button>
+                                    <button id="markSickBtn" class="day-type-btn sick">Sick Day</button>
+                                    <button id="markAnnualLeaveBtn" class="day-type-btn leave">Annual Leave</button>
+                                    <button id="clearSelectionBtn" class="day-type-btn clear">Clear</button>
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
+
+                    <!-- Right Panel: Calendar -->
+                    <div class="attendance-calendar">
+                        <div class="calendar-nav">
+                            <button id="attendancePrevMonth" class="nav-btn">Previous</button>
+                            <h2 id="attendanceMonthYear"></h2>
+                            <button id="attendanceNextMonth" class="nav-btn">Next</button>
+                        </div>
+
+                        <div class="weekdays">
+                            <div class="weekday">Mon</div>
+                            <div class="weekday">Tue</div>
+                            <div class="weekday">Wed</div>
+                            <div class="weekday">Thu</div>
+                            <div class="weekday">Fri</div>
+                            <div class="weekday">Sat</div>
+                            <div class="weekday">Sun</div>
+                        </div>
+
+                        <div id="attendanceGridContainer" class="calendar-grid"></div>
+                    </div>
                 </div>
             </div>
         </main>
