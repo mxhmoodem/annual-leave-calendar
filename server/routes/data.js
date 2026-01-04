@@ -12,6 +12,8 @@ router.get('/', authenticate, async (req, res) => {
         }
         
         res.json({
+            name: user.name,
+            email: user.email,
             totalHolidays: user.totalHolidays,
             holidays: Object.fromEntries(user.holidays || new Map()),
             attendanceData: Object.fromEntries(user.attendanceData || new Map()),

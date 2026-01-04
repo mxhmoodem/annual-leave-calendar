@@ -3,7 +3,10 @@ import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebas
 import { 
     getAuth, 
     signInWithPopup, 
-    GoogleAuthProvider, 
+    GoogleAuthProvider,
+    GithubAuthProvider, 
+    signInWithEmailAndPassword,
+    createUserWithEmailAndPassword,
     onAuthStateChanged,
     signOut 
 } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
@@ -20,7 +23,8 @@ const firebaseConfig = {
 
 const firebaseApp = initializeApp(firebaseConfig);
 const auth = getAuth(firebaseApp);
-const provider = new GoogleAuthProvider();
+const googleProvider = new GoogleAuthProvider();
+const githubProvider = new GithubAuthProvider();
 
 let currentUser = null;
 let authToken = null;
@@ -48,13 +52,103 @@ async function apiRequest(endpoint, method = 'GET', body = null) {
     return response.json();
 }
 
-// Login function
-async function loginWithGoogle() {
+// Login function with email/password
+async function loginWithEmail(email, password) {
+    hideAuthError();
     try {
-        await signInWithPopup(auth, provider);
+        await signInWithEmailAndPassword(auth, email, password);
     } catch (error) {
         console.error('Login error:', error);
-        alert('Login failed: ' + error.message);
+        showAuthError('Login failed. Please check your email and password.');
+    }
+}
+
+// Sign up function
+async function signUpWithEmail(email, password) {
+    hideAuthError();
+    try {
+        await createUserWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+        console.error('Signup error:', error);
+        showAuthError('Signup failed. Please try a different email or check your password.');
+    }
+}
+
+// Handle signup form submission
+async function handleSignup() {
+    const firstName = document.getElementById('signupFirstName').value;
+    const lastName = document.getElementById('signupLastName').value;
+    const email = document.getElementById('signupEmail').value;
+    const password = document.getElementById('signupPassword').value;
+    const passwordConfirm = document.getElementById('signupPasswordConfirm').value;
+    
+    if (!firstName || !lastName || !email || !password || !passwordConfirm) {
+        showAuthError('Please fill in all fields');
+        return;
+    }
+    
+    if (password !== passwordConfirm) {
+        showAuthError('Passwords do not match');
+        return;
+    }
+    
+    if (password.length < 6) {
+        showAuthError('Password must be at least 6 characters');
+        return;
+    }
+    
+    await signUpWithEmail(email, password);
+}
+
+// Show auth error message
+function showAuthError(message) {
+    const errorEl = document.getElementById('authError');
+    if (errorEl) {
+        errorEl.textContent = message;
+        errorEl.classList.remove('hidden');
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            errorEl.classList.add('hidden');
+        }, 5000);
+    }
+}
+
+// Hide auth error message
+function hideAuthError() {
+    const errorEl = document.getElementById('authError');
+    if (errorEl) {
+        errorEl.classList.add('hidden');
+    }
+}
+
+// Login function
+async function loginWithGoogle() {
+    hideAuthError();
+    try {
+        await signInWithPopup(auth, googleProvider);
+    } catch (error) {
+        // Ignore popup closed errors
+        if (error.code === 'auth/popup-closed-by-user') {
+            return;
+        }
+        console.error('Login error:', error);
+        showAuthError('Login failed. Please try again.');
+    }
+}
+
+// GitHub login function
+async function loginWithGithub() {
+    hideAuthError();
+    try {
+        await signInWithPopup(auth, githubProvider);
+    } catch (error) {
+        // Ignore popup closed errors
+        if (error.code === 'auth/popup-closed-by-user') {
+            return;
+        }
+        console.error('Login error:', error);
+        showAuthError('Login failed. Please try again.');
     }
 }
 
@@ -67,9 +161,86 @@ async function logout() {
     }
 }
 
-// Make auth functions global for onclick handlers
-window.loginWithGoogle = loginWithGoogle;
-window.logout = logout;
+// Toggle between login and signup modes
+function toggleAuthMode() {
+    const loginForm = document.getElementById('loginForm');
+    const signupForm = document.getElementById('signupForm');
+    
+    loginForm.classList.toggle('hidden');
+    signupForm.classList.toggle('hidden');
+    
+    // Update toggle text
+    const toggleText = document.getElementById('toggleAuthText');
+    if (loginForm.classList.contains('hidden')) {
+        toggleText.textContent = 'Already have an account? ';
+        const link = document.createElement('a');
+        link.href = 'javascript:void(0)';
+        link.id = 'toggleAuthLink';
+        link.textContent = 'Sign in';
+        link.addEventListener('click', toggleAuthMode);
+        toggleText.appendChild(link);
+    } else {
+        toggleText.textContent = 'Don\'t have an account? ';
+        const link = document.createElement('a');
+        link.href = 'javascript:void(0)';
+        link.id = 'toggleAuthLink';
+        link.textContent = 'Sign up';
+        link.addEventListener('click', toggleAuthMode);
+        toggleText.appendChild(link);
+    }
+}
+
+// Setup auth event listeners
+function setupAuthEventListeners() {
+    // Login with email button
+    const loginEmailBtn = document.getElementById('loginEmailBtn');
+    if (loginEmailBtn) {
+        loginEmailBtn.addEventListener('click', () => {
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            if (!email || !password) {
+                showAuthError('Please fill in all fields');
+                return;
+            }
+            
+            loginWithEmail(email, password);
+        });
+    }
+    
+    // Signup button
+    const signupBtn = document.getElementById('signupBtn');
+    if (signupBtn) {
+        signupBtn.addEventListener('click', handleSignup);
+    }
+    
+    // Toggle auth mode link
+    const toggleAuthLink = document.getElementById('toggleAuthLink');
+    if (toggleAuthLink) {
+        toggleAuthLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleAuthMode();
+        });
+    }
+    
+    // Google login button
+    const googleLoginBtn = document.getElementById('googleLoginBtn');
+    if (googleLoginBtn) {
+        googleLoginBtn.addEventListener('click', loginWithGoogle);
+    }
+
+    // GitHub login button
+    const githubLoginBtn = document.getElementById('githubLoginBtn');
+    if (githubLoginBtn) {
+        githubLoginBtn.addEventListener('click', loginWithGithub);
+    }
+    
+    // Logout button
+    const logoutBtn = document.getElementById('logoutBtn');
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', logout);
+    }
+}
 
 // Auth state listener - main app initialization
 onAuthStateChanged(auth, async (user) => {
@@ -89,16 +260,16 @@ onAuthStateChanged(auth, async (user) => {
             await loadFromDatabase();
             
             // Show app, hide login
-            loadingOverlay.style.display = 'none';
-            loginContainer.style.display = 'none';
-            appContainer.style.display = 'block';
-            document.getElementById('userEmail').textContent = user.email;
+            loadingOverlay.classList.add('hidden');
+            loginContainer.classList.remove('visible');
+            appContainer.classList.add('visible');
             
             // Initialize UI
             renderCalendar();
             renderYearView();
             attachEventListeners();
             attachNavigationListeners();
+            setupAuthEventListeners();
             updateStats();
             updateDashboard();
             updateTimeOffTable();
@@ -108,16 +279,17 @@ onAuthStateChanged(auth, async (user) => {
             }
         } catch (error) {
             console.error('Error initializing app:', error);
-            loadingOverlay.style.display = 'none';
-            loginContainer.style.display = 'flex';
-            appContainer.style.display = 'none';
+            loadingOverlay.classList.add('hidden');
+            loginContainer.classList.add('visible');
+            appContainer.classList.remove('visible');
         }
     } else {
         currentUser = null;
         authToken = null;
-        loadingOverlay.style.display = 'none';
-        loginContainer.style.display = 'flex';
-        appContainer.style.display = 'none';
+        loadingOverlay.classList.add('hidden');
+        loginContainer.classList.add('visible');
+        appContainer.classList.remove('visible');
+        setupAuthEventListeners();
     }
 });
 
@@ -133,6 +305,14 @@ async function loadFromDatabase() {
         }
         if (data.currentAttendanceMonth) {
             currentAttendanceMonth = new Date(data.currentAttendanceMonth);
+        }
+        
+        // Update user info in sidebar
+        if (data.name) {
+            document.getElementById('userName').textContent = data.name;
+        }
+        if (data.email) {
+            document.getElementById('userEmail').textContent = data.email;
         }
     } catch (error) {
         console.error('Error loading data from database:', error);

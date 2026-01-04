@@ -5,107 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Holiday Planner Dashboard</title>
     <link rel="stylesheet" href="styles.css">
-    <style>
-        /* Login Container Styles */
-        #loginContainer {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            flex-direction: column;
-            gap: 24px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        }
-        #loginContainer h1 {
-            color: white;
-            font-size: 2.5rem;
-            margin: 0;
-            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-        #loginContainer p {
-            color: rgba(255,255,255,0.9);
-            margin: 0;
-        }
-        .login-btn {
-            padding: 14px 28px;
-            font-size: 16px;
-            cursor: pointer;
-            background: white;
-            color: #333;
-            border: none;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            font-weight: 500;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.2);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .login-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0,0,0,0.25);
-        }
-        .login-btn img {
-            width: 24px;
-            height: 24px;
-        }
-        /* User Header */
-        .user-header {
-            position: fixed;
-            top: 10px;
-            right: 20px;
-            z-index: 1000;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            background: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
-        .user-header span {
-            font-size: 14px;
-            color: #555;
-        }
-        .logout-btn {
-            padding: 6px 14px;
-            cursor: pointer;
-            background: #ff6b6b;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 13px;
-            transition: background 0.2s;
-        }
-        .logout-btn:hover {
-            background: #ee5a52;
-        }
-        .loading-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(255,255,255,0.9);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-            flex-direction: column;
-            gap: 16px;
-        }
-        .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid #e1e8ed;
-            border-top-color: #667eea;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-    </style>
 </head>
 <body>
     <!-- Loading Overlay -->
@@ -115,22 +14,83 @@
     </div>
 
     <!-- Login Container -->
-    <div id="loginContainer" style="display: none;">
-        <h1>🗓️ Holiday Planner</h1>
-        <p>Track your annual leave, sick days, and attendance</p>
-        <button onclick="loginWithGoogle()" class="login-btn">
-            <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" alt="Google">
-            Sign in with Google
-        </button>
+    <div id="loginContainer">
+        <div class="login-card">
+            <!-- Logo/Icon -->
+            <div class="login-icon">
+                <img src="images/calender.png" alt="Calendar Icon" style="width:48px;height:48px;object-fit:contain;" />
+            </div>
+
+            <!-- Title -->
+            <h1>Annual Leave</h1>
+            <p class="subtitle">Track your time off</p>
+
+            <!-- Error Message -->
+            <div id="authError" class="auth-error hidden"></div>
+
+            <!-- Email/Password Login Form -->
+            <form id="loginForm">
+                <div class="form-group">
+                    <input type="email" id="loginEmail" placeholder="Email Address" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="loginPassword" placeholder="Password" required>
+                </div>
+                <div class="form-checkbox">
+                    <input type="checkbox" id="loginRemember">
+                    <label for="loginRemember">Keep me logged in</label>
+                </div>
+                <button type="button" id="loginEmailBtn" class="primary-btn">
+                    Enter Dashboard
+                </button>
+            </form>
+
+            <!-- Email/Password Signup Form -->
+            <form id="signupForm" class="hidden">
+                <div class="form-row">
+                    <div class="form-group">
+                        <input type="text" id="signupFirstName" placeholder="First Name" required>
+                    </div>
+                    <div class="form-group">
+                        <input type="text" id="signupLastName" placeholder="Last Name" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <input type="email" id="signupEmail" placeholder="Email Address" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="signupPassword" placeholder="Password (min 6 chars)" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="signupPasswordConfirm" placeholder="Confirm Password" required>
+                </div>
+                <button type="button" id="signupBtn" class="primary-btn">
+                    Create Account
+                </button>
+            </form>
+
+            <!-- Divider -->
+            <div class="auth-divider">or</div>
+
+            <!-- Social Login Buttons -->
+            <div class="social-login">
+                <button id="googleLoginBtn" class="social-btn google-btn" title="Sign in with Google">
+                    <img src="images/google-icon.png" alt="Google">
+                </button>
+                <button id="githubLoginBtn" class="social-btn github-btn" title="Sign in with GitHub">
+                    <img src="images/github-icon.png" alt="GitHub">
+                </button>
+            </div>
+
+            <!-- Toggle Auth Mode -->
+            <p id="toggleAuthText" class="toggle-text">
+                New to leave tracking? <a href="javascript:void(0)" id="toggleAuthLink">Begin your journey</a>
+            </p>
+        </div>
     </div>
 
     <!-- Main App Container -->
-    <div id="appContainer" class="app-container" style="display: none;">
-        <!-- User Header -->
-        <div class="user-header">
-            <span id="userEmail"></span>
-            <button onclick="logout()" class="logout-btn">Logout</button>
-        </div>
+    <div id="appContainer" class="app-container">
         <!-- Main Navigation Sidebar -->
         <aside id="sidebar" class="sidebar">
             <div class="sidebar-header">
@@ -149,6 +109,23 @@
                 <button class="nav-item" data-view="calendar"><img src="images/calender.png" alt="" class="nav-icon"><span class="nav-text">Leave Calendar</span></button>
                 <button class="nav-item" data-view="attendance"><img src="images/attendance.png" alt="" class="nav-icon"><span class="nav-text">Attendance</span></button>
             </nav>
+
+            <!-- User Header (Bottom of Sidebar) -->
+            <div class="user-header">
+                <div class="user-avatar">
+                    <svg viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="12" cy="8" r="4"/>
+                        <path d="M4 20c0-3.3 3.6-6 8-6s8 2.7 8 6v2H4v-2z"/>
+                    </svg>
+                </div>
+                <div class="user-info">
+                    <span id="userName" class="user-name"></span>
+                    <span id="userEmail" class="user-email"></span>
+                </div>
+                <button id="logoutBtn" class="logout-btn" title="Logout">
+                    <img src="images/logout-icon.png" alt="Logout">
+                </button>
+            </div>
         </aside>
 
         <!-- Main Content Area -->
@@ -297,10 +274,10 @@
                                 <input type="text" id="selectedDateRight" readonly placeholder="Click calendar">
                             </div>
                             
-                            <div id="selectedDatesContainerRight" class="selected-dates" style="display: none;">
+                            <div id="selectedDatesContainerRight" class="selected-dates hidden">
                                 <label>Selected Dates:</label>
                                 <div id="selectedDatesListRight" class="selected-dates-list"></div>
-                                <button id="clearSelectionBtnRight" class="btn btn-secondary" style="width: 100%; margin-top: 8px;">Clear Selection</button>
+                                <button id="clearSelectionBtnRight" class="btn btn-secondary full-width-btn">Clear Selection</button>
                             </div>
                             
                             <div class="form-group">
@@ -322,12 +299,12 @@
                                 <div class="color-picker">
                                     <input type="color" id="holidayColorRight" value="#4ecdc4">
                                     <div class="color-presets">
-                                        <button class="color-btn" style="background-color: #4ecdc4;" data-color="#4ecdc4" title="Teal"></button>
-                                        <button class="color-btn" style="background-color: #ff6b6b;" data-color="#ff6b6b" title="Red"></button>
-                                        <button class="color-btn" style="background-color: #ffd93d;" data-color="#ffd93d" title="Gold"></button>
-                                        <button class="color-btn" style="background-color: #6bcf7f;" data-color="#6bcf7f" title="Green"></button>
-                                        <button class="color-btn" style="background-color: #9b59b6;" data-color="#9b59b6" title="Purple"></button>
-                                        <button class="color-btn" style="background-color: #3498db;" data-color="#3498db" title="Blue"></button>
+                                        <button class="color-btn" data-color="#4ecdc4" style="--color: #4ecdc4;" title="Teal"></button>
+                                        <button class="color-btn" data-color="#ff6b6b" style="--color: #ff6b6b;" title="Red"></button>
+                                        <button class="color-btn" data-color="#ffd93d" style="--color: #ffd93d;" title="Gold"></button>
+                                        <button class="color-btn" data-color="#6bcf7f" style="--color: #6bcf7f;" title="Green"></button>
+                                        <button class="color-btn" data-color="#9b59b6" style="--color: #9b59b6;" title="Purple"></button>
+                                        <button class="color-btn" data-color="#3498db" style="--color: #3498db;" title="Blue"></button>
                                     </div>
                                 </div>
                             </div>
@@ -386,19 +363,19 @@
                                 
                                 <div class="calendar-legend">
                                     <div class="legend-item">
-                                        <div class="legend-color" style="background-color: #4ecdc4;"></div>
+                                        <div class="legend-color legend-holiday"></div>
                                         <span>Holiday</span>
                                     </div>
                                     <div class="legend-item">
-                                        <div class="legend-color" style="background: linear-gradient(135deg, #ffe0e0 0%, #ffcccc 100%);"></div>
+                                        <div class="legend-color legend-sick"></div>
                                         <span>Sick Day</span>
                                     </div>
                                     <div class="legend-item">
-                                        <div class="legend-color" style="background: linear-gradient(135deg, #ffe8cc 0%, #ffd99f 100%);"></div>
+                                        <div class="legend-color legend-unpaid"></div>
                                         <span>Unpaid Leave</span>
                                     </div>
                                     <div class="legend-item">
-                                        <div class="legend-color" style="background: linear-gradient(135deg, #ffe5e5 0%, #ffcccc 100%);"></div>
+                                        <div class="legend-color legend-bank-holiday"></div>
                                         <span>Bank Holiday</span>
                                     </div>
                                 </div>

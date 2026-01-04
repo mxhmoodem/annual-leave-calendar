@@ -3,15 +3,15 @@
 A responsive web dashboard to help you plan and track your annual leave holidays, sick days, bank holidays and unpaid leave. Built with Node.js, Express, MongoDB, and Firebase Authentication.
 
 ## Features
-- 🔐 Google Authentication (Firebase)
-- 💾 Cloud data storage (MongoDB Atlas)
-- 📅 Interactive calendar with month and year views
-- ✅ Assign holidays, sick days and unpaid leave to any date
-- 🎨 Color-coded days and custom labels
-- 🇬🇧 UK bank holidays automatically highlighted
-- 📊 Attendance tracking with statistics
-- 🖱️ Multi-select mode for bulk assignment
-- 📤 Export your schedule to a text file
+- Google Authentication (Firebase)
+- Cloud data storage (MongoDB Atlas)
+- Interactive calendar with month and year views
+- Assign holidays, sick days and unpaid leave to any date
+- Color-coded days and custom labels
+- UK bank holidays automatically highlighted
+- Attendance tracking with statistics
+- Multi-select mode for bulk assignment
+- Export your schedule to a text file
 
 ## Prerequisites
 - Node.js (v18 or higher)
