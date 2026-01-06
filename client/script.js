@@ -345,8 +345,6 @@ function saveToLocalStorage() {
     saveToDatabase();
 }
 
-// ==================== END FIREBASE AUTH & API ====================
-
 // UK Bank Holidays 2025-2026
 const UK_BANK_HOLIDAYS = {
     '2025': [
